@@ -27,7 +27,7 @@ data_dir = os.path.join(project_dir, "data", "invest")
 def make_prefix(dp, template_type='base'):
     if template_type == 'base':
         """This works for any base model"""
-        prefix = f"""用户与基金经理之间的对话。基金经理管理着一只基金，基金里面只投资沪深300指数，剩余全是现金，你需要每天根据市场信息做出对沪深300仓位增减的决策，目标是使最大化基金收益率，最小化回撤率。用户提供市场信息，基金经理负责解答。基金经理会先在脑海中思考推理过程，然后向用户提供一个答案。
+        prefix = f"""用户与基金经理之间的对话。基金经理管理着一只基金，基金里面只投资沪深300指数，剩余全是现金，你需要每天根据市场信息做出对沪深300仓位增减的决策，目标是使最大化基金收益率，最小化回撤率。用户提供市场信息，基金经理负责解答。基金经理会先在脑海中思考推理过程，然后向用户提供一个答案，思考过程与答案不能相互矛盾。
 用户：请分别参考动量领域的观点："{dp['momentum']}"；估值领域的观点："{dp['valuation']}"；情绪领域的观点："{dp['sentiment']}"；情绪领域的观点："{dp['macro']}"。利用上述领域的观点提供对股票的操作建议，在"加仓"、"减仓"或者"持仓不动"中选择一个。请在<think></think>标签中展示思考过程，并在<answer></answer>标签中返回最终答案，例如<answer>加仓</answer>；
 基金经理：让我逐步解决这个问题。
 <think>"""
@@ -135,8 +135,30 @@ def gen_dataset():
     df_output.to_csv(excel_output_path, encoding='utf_8_sig', index=False)
     print()
 
+def analyze_dateset():
+    excel_input_path = os.path.join(data_dir, "train.csv")
+    df_train = pd.read_csv(excel_input_path)
+    data = []
+    for name in ["加仓", "减仓", "持仓不动", "回撤"]:
+        if name != "回撤":
+            data.append({
+                "目标": name,
+                "数量": (df_train["target"] == name).sum(),
+                "比例": (df_train["target"] == name).sum() / len(df_train),
+            })
+        else:
+            data.append({
+                "目标": name,
+                "数量": df_train["has_drawdown"].sum(),
+                "比例": df_train["has_drawdown"].sum() / len(df_train),
+            })
+    df_data = pd.DataFrame(data)
+    excel_output_path = os.path.join(data_dir, "analyze.csv")
+    df_data.to_csv(excel_output_path, encoding='utf_8_sig', index=False)
+
 
 if __name__ == '__main__':
+    # analyze_dateset()
     parser = argparse.ArgumentParser()
     parser.add_argument('--local_dir', default=data_dir)
     parser.add_argument('--hdfs_dir', default=None)
@@ -206,20 +228,3 @@ if __name__ == '__main__':
     if hdfs_dir is not None:
         makedirs(hdfs_dir)
         copy(src=local_dir, dst=hdfs_dir)
-
-
-    # import random
-    # from verl.utils.reward_score.invest import compute_score
-    # ans = ["加仓", "减仓", "持仓不动"]
-    # for i in range(10):
-    #     answer_ = f"""
-    #     基金经理:让我逐步解决这个问题。
-    #     <think>
-    #     1. 动量指标显示股票处于上升趋势，建议加仓。
-    #     2. 估值指标显示股票被低估，支持加仓。
-    #     3. 情绪指标显示市场情绪积极，支持加仓。
-    #     综合以上因素，建议加仓。
-    #     </think>
-    #     <answer>{ans[random.randint(0, 2)]}</answer>
-    #     """
-    #     print(f"{compute_score(answer_, train_dataset[i])}")
