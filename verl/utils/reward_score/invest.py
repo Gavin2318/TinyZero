@@ -54,6 +54,35 @@ def count_keyword_hits(reason_str) -> tuple[dict, float]:
 
     return dict(hit_counts), round(len(hit_counts) / len(key_words), 2)
 
+def check_answer_consistency(answer, think):
+    if answer is None:
+        answer = ''
+    if think is None:
+        think = ''
+    # 定义各个操作的关键词
+    keywords = {
+        "加仓": ["加仓", "增持", "提高仓位", "增加持仓", "增加.*仓位"],
+        "减仓": ["减仓", "减持", "降低仓位", "减少持仓", "减少.*仓位"],
+        "持仓不动": ["持仓不动", "保持仓位", "维持现有仓位", "观望", "不做调整"]
+    }
+
+    # 标记在哪些操作中找到了关键词
+    matched_actions = set()
+
+    for action, patterns in keywords.items():
+        for pattern in patterns:
+            if re.search(pattern, think):
+                matched_actions.add(action)
+                break
+
+    if len(matched_actions) == 0:
+        return None  # 没有匹配到任何关键词
+
+    if len(matched_actions) == 1 and answer in matched_actions:
+        return True  # 推理与答案一致
+
+    return False  # 答案和推理中匹配到的关键词不一致，存在矛盾
+
 
 def compute_score(solution_str, ground_truth, method='strict', format_score=0.1, trend_score=0.5, score=1.):
     """The scoring function for countdown task.
@@ -77,10 +106,10 @@ def compute_score(solution_str, ground_truth, method='strict', format_score=0.1,
     if do_print:
         print(f"--------------------------------")
         print(f"Target: {target} | views: {views}")
-        print(f"Extracted answer: {answer}")
-        print(f"Solution string: {solution_str}")
+        print(f"Extracted answer : {answer}")
+        print(f"Solution string  : {solution_str}")
 
-    # 情况1： 无答案 --> 0
+    # 情况1： 无答案 / 答案格式错误 --> 0
     if answer is None:
         if do_print:
             print(f"结论未发现")
@@ -88,22 +117,39 @@ def compute_score(solution_str, ground_truth, method='strict', format_score=0.1,
 
     _, count_rate = count_keyword_hits(think)
 
+    # 情况2： 答案错误
     if answer != target:
-        # 判断答案错误的情况
-        # 情况2： 答案错误，但是命中了关键词  --> 类别 * format_score
-        if do_print:
-            print(f"结论错误，关键词命中率 {count_rate * 100:.0f}%")
-        return count_rate * format_score
-    else:
-        # 判断答案正确的情况
-        # 情况3： 答案正确
+        # 情况2.1： 答案错误，但是命中了关键词  --> 类别 * format_score
         if answer == '减仓' and trend:
             if do_print:
-                print(f"结论正确，{answer}后检测到回撤现象")
-            return score + trend_score
-        if do_print: print(f"结论正确: {answer}")
-        return score
-
+                print(f"结论错误，命中回撤，关键词命中率 {count_rate * 100:.0f}%")
+            return count_rate * format_score + trend_score
+        else:
+            if do_print:
+                print(f"结论错误，关键词命中率 {count_rate * 100:.0f}%")
+            return count_rate * format_score
+    else:
+        # 情况3： 答案正确
+        ans_cons = check_answer_consistency(answer, think)
+        # 情况3.1: 未命中任何结论
+        if ans_cons is None:
+            if do_print:
+                print(f"结论正确，但与推理无关")
+            if answer == '持仓不动':
+                return 0.2
+            else:
+                return 0.8
+        elif ans_cons is False:
+            if do_print:
+                print(f"结论正确，但与推理矛盾")
+            return 0
+        else:
+            if do_print:
+                print(f"结论与推理正确")
+            if answer == '持仓不动':
+                return 0.25
+            else:
+                return score
 
 if __name__ == '__main__':
     sample_input = """
