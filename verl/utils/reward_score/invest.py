@@ -84,7 +84,7 @@ def check_answer_consistency(answer, think):
     return False  # 答案和推理中匹配到的关键词不一致，存在矛盾
 
 
-def compute_score(solution_str, ground_truth, method='strict', format_score=0.1, trend_score=0.5, score=1.):
+def compute_score(solution_str, ground_truth, method='strict', format_score=0.05, trend_score=0.5, score=1.):
     """The scoring function for countdown task.
 
     Args:
@@ -97,7 +97,6 @@ def compute_score(solution_str, ground_truth, method='strict', format_score=0.1,
     """
     target = ground_truth['target']
     views = ground_truth['views']
-    trend = ground_truth['has_drawdown']
 
     think, answer = extract_solution(solution_str=solution_str)
     do_print = random.randint(1, 64) == 1
@@ -119,37 +118,24 @@ def compute_score(solution_str, ground_truth, method='strict', format_score=0.1,
 
     # 情况2： 答案错误
     if answer != target:
-        # 情况2.1： 答案错误，但是命中了关键词  --> 类别 * format_score
-        if answer == '减仓' and trend:
+        # 情况2.1： 答案错误，但是命中了关键词
+        if think is None:
             if do_print:
-                print(f"结论错误，命中回撤，关键词命中率 {count_rate * 100:.0f}%")
-            return count_rate * format_score + trend_score
+                print(f"结论错误")
+            return 0
         else:
             if do_print:
                 print(f"结论错误，关键词命中率 {count_rate * 100:.0f}%")
             return count_rate * format_score
     else:
         # 情况3： 答案正确
-        ans_cons = check_answer_consistency(answer, think)
-        # 情况3.1: 未命中任何结论
-        if ans_cons is None:
-            if do_print:
-                print(f"结论正确，但与推理无关")
-            if answer == '持仓不动':
-                return 0.2
-            else:
-                return 0.8
-        elif ans_cons is False:
-            if do_print:
-                print(f"结论正确，但与推理矛盾")
-            return 0
+        if do_print:
+            print(f"结论正确")
+        if target == '无回撤':
+            return 0.15
         else:
-            if do_print:
-                print(f"结论与推理正确")
-            if answer == '持仓不动':
-                return 0.25
-            else:
-                return score
+            return score
+
 
 if __name__ == '__main__':
     sample_input = """
